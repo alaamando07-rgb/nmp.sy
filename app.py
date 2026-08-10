@@ -15,14 +15,12 @@ def home():
         conn = sqlite3.connect('database.db')
         cursor = conn.cursor()
         
-        # جلب اسم الجدول الأول في قاعدة البيانات
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = cursor.fetchall()
         if not tables:
             return "قاعدة البيانات فارغة من الجداول."
         table_name = tables[0][0]
         
-        # جلب أسماء الأعمدة للتحقق
         cursor.execute(f"PRAGMA table_info({table_name});")
         columns = [col[1] for col in cursor.fetchall()]
         
@@ -68,10 +66,8 @@ def home():
             pending = total - (attending + declined)
             conn.close()
             
-            # إرسال المتغيرات مطابقة تماماً لما يتوقعه admin.html
             return render_template('admin.html', guests=guests, total=total, attending=attending, declined=declined, pending=pending)
         
-        # عرض بطاقة الضيف
         if status_col:
             cursor.execute(f"SELECT [{name_col}], [{token_col}], [{status_col}] FROM [{table_name}] WHERE [{token_col}] = ?", (token,))
         else:
@@ -95,7 +91,6 @@ def home():
         return render_template('card.html', guest=guest)
         
     except Exception as e:
-        # سنعرض الخطأ التقني الحقيقي هنا لكي نراه بوضوح إذا حدث أي شيء
         import traceback
         return f"<pre>{traceback.format_exc()}</pre>"
 
@@ -158,6 +153,70 @@ def reset_vote(token):
         conn.close()
     except Exception:
         pass
+    return redirect(url_for('home'))
+
+@app.route('/edit/<token>')
+def edit_guest(token):
+    try:
+        conn = sqlite3.connect('database.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        table_name = cursor.fetchone()[0]
+        
+        cursor.execute(f"PRAGMA table_info({table_name});")
+        columns = [col[1] for col in cursor.fetchall()]
+        name_col = columns[1] if len(columns) > 1 else columns[0]
+        token_col = columns[2] if len(columns) > 2 else columns[0]
+        
+        for c in columns:
+            lc = c.lower()
+            if 'name' in lc or 'اسم' in lc:
+                name_col = c
+            elif 'token' in lc or 'رابط' in lc or 'رمز' in lc or 'code' in lc:
+                token_col = c
+                
+        cursor.execute(f"SELECT [{name_col}], [{token_col}] FROM [{table_name}] WHERE [{token_col}] = ?", (token,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return "الضيف غير موجود."
+            
+        guest = {'name': row[0], 'token': row[1]}
+        return render_template('edit.html', guest=guest)
+    except Exception as e:
+        return f"خطأ: {str(e)}"
+
+@app.route('/update', methods=['POST'])
+def update_guest():
+    token = request.form.get('token')
+    new_name = request.form.get('name')
+    
+    if token and new_name:
+        try:
+            conn = sqlite3.connect('database.db')
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            table_name = cursor.fetchone()[0]
+            
+            cursor.execute(f"PRAGMA table_info({table_name});")
+            columns = [col[1] for col in cursor.fetchall()]
+            name_col = columns[1] if len(columns) > 1 else columns[0]
+            token_col = columns[2] if len(columns) > 2 else columns[0]
+            
+            for c in columns:
+                lc = c.lower()
+                if 'name' in lc or 'اسم' in lc:
+                    name_col = c
+                elif 'token' in lc or 'رابط' in lc or 'رمز' in lc or 'code' in lc:
+                    token_col = c
+                    
+            cursor.execute(f"UPDATE [{table_name}] SET [{name_col}] = ? WHERE [{token_col}] = ?", (new_name, token))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+            
     return redirect(url_for('home'))
 
 if __name__ == '__main__':
