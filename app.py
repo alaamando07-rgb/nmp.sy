@@ -1,8 +1,14 @@
 from flask import Flask, render_template, request, redirect, url_for
 import sqlite3
 import os
+import uuid
 
 app = Flask(__name__)
+
+def get_db_connection():
+    conn = sqlite3.connect('database.db')
+    conn.row_factory = sqlite3.Row
+    return conn
 
 @app.route('/')
 def home():
@@ -12,17 +18,17 @@ def home():
         return "خطأ: ملف قاعدة البيانات غير موجود على السيرفر."
     
     try:
-        conn = sqlite3.connect('database.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
         
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = cursor.fetchall()
         if not tables:
             return "قاعدة البيانات فارغة من الجداول."
-        table_name = tables[0][0]
+        table_name = tables[0]['name']
         
-        cursor.execute(f"PRAGMA table_info({table_name});")
-        columns = [col[1] for col in cursor.fetchall()]
+        cursor.execute(f"PRAGMA table_info([{table_name}]);")
+        columns = [col['name'] for col in cursor.fetchall()]
         
         name_col = columns[1] if len(columns) > 1 else columns[0]
         token_col = columns[2] if len(columns) > 2 else columns[0]
@@ -39,9 +45,9 @@ def home():
 
         if not token:
             if status_col:
-                cursor.execute(f"SELECT [{name_col}], [{token_col}], [{status_col}] FROM [{table_name}]")
+                cursor.execute(f"SELECT rowid, [{name_col}], [{token_col}], [{status_col}] FROM [{table_name}]")
             else:
-                cursor.execute(f"SELECT [{name_col}], [{token_col}] FROM [{table_name}]")
+                cursor.execute(f"SELECT rowid, [{name_col}], [{token_col}] FROM [{table_name}]")
                 
             raw_guests = cursor.fetchall()
             
@@ -50,9 +56,9 @@ def home():
             declined = 0
             
             for row in raw_guests:
-                name = row[0]
-                guest_token = row[1]
-                status = row[2] if len(row) > 2 and row[2] else 'لم يجب'
+                name = row[name_col]
+                guest_token = row[token_col]
+                status = row[status_col] if status_col and row[status_col] else 'لم يجب'
                 
                 if status == 'سأحضر':
                     attending += 1
@@ -60,7 +66,13 @@ def home():
                     declined += 1
                     
                 link = f"https://nmp-sy.onrender.com/?token={guest_token}"
-                guests.append((name, guest_token, status, link))
+                guests.append({
+                    'id': row['rowid'],
+                    'name': name,
+                    'token': guest_token,
+                    'status': status,
+                    'link': link
+                })
             
             total = len(guests)
             pending = total - (attending + declined)
@@ -68,6 +80,7 @@ def home():
             
             return render_template('admin.html', guests=guests, total=total, attending=attending, declined=declined, pending=pending)
         
+        # عرض بطاقة الضيف
         if status_col:
             cursor.execute(f"SELECT [{name_col}], [{token_col}], [{status_col}] FROM [{table_name}] WHERE [{token_col}] = ?", (token,))
         else:
@@ -80,9 +93,9 @@ def home():
             return "الرابط غير موجود أو تم حذفه."
         
         guest = {
-            'name': guest_data[0],
-            'token': guest_data[1],
-            'status': guest_data[2] if len(guest_data) > 2 and guest_data[2] else 'لم يجب'
+            'name': guest_data[name_col],
+            'token': guest_data[token_col],
+            'status': guest_data[status_col] if status_col and guest_data[status_col] else 'لم يجب'
         }
         
         if guest['status'] in ['سأحضر', 'أعتذر عن الحضور']:
@@ -94,6 +107,42 @@ def home():
         import traceback
         return f"<pre>{traceback.format_exc()}</pre>"
 
+@app.route('/add', methods=['POST'])
+def add_guest():
+    name = request.form.get('name')
+    if name:
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            table_name = cursor.fetchone()['name']
+            
+            cursor.execute(f"PRAGMA table_info([{table_name}]);")
+            columns = [col['name'] for col in cursor.fetchall()]
+            name_col = columns[1] if len(columns) > 1 else columns[0]
+            token_col = columns[2] if len(columns) > 2 else columns[0]
+            status_col = columns[3] if len(columns) > 3 else None
+            
+            for c in columns:
+                lc = c.lower()
+                if 'name' in lc or 'اسم' in lc:
+                    name_col = c
+                elif 'token' in lc or 'رابط' in lc or 'رمز' in lc or 'code' in lc:
+                    token_col = c
+                elif 'status' in lc or 'حالة' in lc or 'رد' in lc:
+                    status_col = c
+            
+            new_token = str(uuid.uuid4())[:8]
+            if status_col:
+                cursor.execute(f"INSERT INTO [{table_name}] ([{name_col}], [{token_col}], [{status_col}]) VALUES (?, ?, ?)", (name, new_token, 'لم يجب'))
+            else:
+                cursor.execute(f"INSERT INTO [{table_name}] ([{name_col}], [{token_col}]) VALUES (?, ?)", (name, new_token))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+    return redirect(url_for('home'))
+
 @app.route('/submit', methods=['POST'])
 def submit():
     token = request.form.get('token')
@@ -101,13 +150,13 @@ def submit():
     
     if token and attendance:
         try:
-            conn = sqlite3.connect('database.db')
+            conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            table_name = cursor.fetchone()[0]
+            table_name = cursor.fetchone()['name']
             
-            cursor.execute(f"PRAGMA table_info({table_name});")
-            columns = [col[1] for col in cursor.fetchall()]
+            cursor.execute(f"PRAGMA table_info([{table_name}]);")
+            columns = [col['name'] for col in cursor.fetchall()]
             token_col = columns[2] if len(columns) > 2 else columns[0]
             status_col = columns[3] if len(columns) > 3 else None
             
@@ -130,13 +179,13 @@ def submit():
 @app.route('/reset/<token>')
 def reset_vote(token):
     try:
-        conn = sqlite3.connect('database.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        table_name = cursor.fetchone()[0]
+        table_name = cursor.fetchone()['name']
         
-        cursor.execute(f"PRAGMA table_info({table_name});")
-        columns = [col[1] for col in cursor.fetchall()]
+        cursor.execute(f"PRAGMA table_info([{table_name}]);")
+        columns = [col['name'] for col in cursor.fetchall()]
         token_col = columns[2] if len(columns) > 2 else columns[0]
         status_col = columns[3] if len(columns) > 3 else None
         
@@ -158,13 +207,13 @@ def reset_vote(token):
 @app.route('/edit/<token>')
 def edit_guest(token):
     try:
-        conn = sqlite3.connect('database.db')
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        table_name = cursor.fetchone()[0]
+        table_name = cursor.fetchone()['name']
         
-        cursor.execute(f"PRAGMA table_info({table_name});")
-        columns = [col[1] for col in cursor.fetchall()]
+        cursor.execute(f"PRAGMA table_info([{table_name}]);")
+        columns = [col['name'] for col in cursor.fetchall()]
         name_col = columns[1] if len(columns) > 1 else columns[0]
         token_col = columns[2] if len(columns) > 2 else columns[0]
         
@@ -182,7 +231,7 @@ def edit_guest(token):
         if not row:
             return "الضيف غير موجود."
             
-        guest = {'name': row[0], 'token': row[1]}
+        guest = {'name': row[name_col], 'token': row[token_col]}
         return render_template('edit.html', guest=guest)
     except Exception as e:
         return f"خطأ: {str(e)}"
@@ -194,13 +243,13 @@ def update_guest():
     
     if token and new_name:
         try:
-            conn = sqlite3.connect('database.db')
+            conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            table_name = cursor.fetchone()[0]
+            table_name = cursor.fetchone()['name']
             
-            cursor.execute(f"PRAGMA table_info({table_name});")
-            columns = [col[1] for col in cursor.fetchall()]
+            cursor.execute(f"PRAGMA table_info([{table_name}]);")
+            columns = [col['name'] for col in cursor.fetchall()]
             name_col = columns[1] if len(columns) > 1 else columns[0]
             token_col = columns[2] if len(columns) > 2 else columns[0]
             
