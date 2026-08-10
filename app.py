@@ -3,7 +3,38 @@ import sqlite3
 
 app = Flask(__name__)
 
+# 1. جعل لوحة التحكم هي الصفحة الأساسية التي تفتح فوراً على رابط الموقع الرئيسي
 @app.route('/')
+def admin_dashboard():
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT name, token, status FROM guests")
+    raw_guests = cursor.fetchall()
+    
+    # توليد الرابط الخاص بكل صيدلاني ليوجهه لصفحة الدعوة مع التوكن الخاص به
+    guests = []
+    for name, token, status in raw_guests:
+        link = f"https://nmp-sy.onrender.com/invite?token={token}"
+        guests.append((name, token, status, link))
+    
+    cursor.execute("SELECT COUNT(*) FROM guests")
+    total = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM guests WHERE status = 'سأحضر'")
+    attending = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM guests WHERE status = 'أعتذر عن الحضور'")
+    declined = cursor.fetchone()[0]
+    
+    pending = total - (attending + declined)
+    
+    conn.close()
+    
+    return render_template('admin.html', guests=guests, total=total, attending=attending, declined=declined, pending=pending)
+
+# 2. صفحة الدعوة الفردية الخاصة بكل صيدلاني
+@app.route('/invite')
 def index():
     token = request.args.get('token')
     if not token:
@@ -48,35 +79,6 @@ def submit():
         conn.close()
     
     return render_template('thankyou.html', already_voted=False)
-
-@app.route('/admin')
-def admin_dashboard():
-    conn = sqlite3.connect('database.db')
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT name, token, status FROM guests")
-    raw_guests = cursor.fetchall()
-    
-    # تجهيز قائمة الضيوف مع الرابط المباشر
-    guests = []
-    for name, token, status in raw_guests:
-        link = f"https://nmp-sy.onrender.com/?token={token}"
-        guests.append((name, token, status, link))
-    
-    cursor.execute("SELECT COUNT(*) FROM guests")
-    total = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT COUNT(*) FROM guests WHERE status = 'سأحضر'")
-    attending = cursor.fetchone()[0]
-    
-    cursor.execute("SELECT COUNT(*) FROM guests WHERE status = 'أعتذر عن الحضور'")
-    declined = cursor.fetchone()[0]
-    
-    pending = total - (attending + declined)
-    
-    conn.close()
-    
-    return render_template('admin.html', guests=guests, total=total, attending=attending, declined=declined, pending=pending)
 
 @app.route('/reset/<token>')
 def reset_vote(token):
