@@ -3,10 +3,6 @@ import sqlite3
 
 app = Flask(__name__)
 
-# فرض استخدام نطاق Render الخارجي لجميع الروابط المولدة تلقائياً
-app.config['SERVER_NAME'] = 'nmp-sy.onrender.com'
-app.config['PREFERRED_URL_SCHEME'] = 'https'
-
 @app.route('/')
 def index():
     token = request.args.get('token')
@@ -28,7 +24,6 @@ def index():
         'status': guest_data[2]
     }
     
-    # منع التصويت فقط إذا كانت الحالة مسجلة بشكل صريح بـ سأحضر أو أعتذر
     if guest['status'] in ['سأحضر', 'أعتذر عن الحضور']:
         return render_template('thankyou.html', guest=guest, already_voted=True)
     
@@ -62,7 +57,7 @@ def admin_dashboard():
     cursor.execute("SELECT name, token, status FROM guests")
     raw_guests = cursor.fetchall()
     
-    # تجهيز قائمة الضيوف مع الروابط الخارجية الصحيحة لتجنب روابط localhost
+    # توليد الرابط مع النطاق الصحيح مباشرة
     guests = []
     for name, token, status in raw_guests:
         link = f"https://nmp-sy.onrender.com/?token={token}"
@@ -83,7 +78,6 @@ def admin_dashboard():
     
     return render_template('admin.html', guests=guests, total=total, attending=attending, declined=declined, pending=pending)
 
-# مسار إعادة التعيين من لوحة التحكم
 @app.route('/reset/<token>')
 def reset_vote(token):
     conn = sqlite3.connect('database.db')
