@@ -57,7 +57,7 @@ def admin_dashboard():
     cursor.execute("SELECT name, token, status FROM guests")
     raw_guests = cursor.fetchall()
     
-    # توليد الرابط مع النطاق الصحيح مباشرة
+    # تجهيز قائمة الضيوف مع الرابط المباشر
     guests = []
     for name, token, status in raw_guests:
         link = f"https://nmp-sy.onrender.com/?token={token}"
