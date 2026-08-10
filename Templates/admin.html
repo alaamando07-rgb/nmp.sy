@@ -166,8 +166,8 @@
                     <tr>
                         <td>{{ loop.index }}</td>
                         <td><strong>{{ guest[0] }}</strong></td>
-                        <!-- تم ضبط الرابط ليوجه إلى مسار invite الصحيح -->
-                        <td><a href="https://nmp-sy.onrender.com/invite?token={{ guest[1] }}" target="_blank" class="link-text">فتح الرابط</a></td>
+                        <!-- الرابط المباشر الصحيح الممرر من بايثون عبر guest[3] -->
+                        <td><a href="{{ guest[3] }}" target="_blank" class="link-text">فتح الرابط</a></td>
                         <td>
                             {% if guest[2] == 'سأحضر' %}
                                 <span class="badge badge-attending">سأحضر</span>
