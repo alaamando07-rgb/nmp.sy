@@ -5,7 +5,6 @@ import os
 
 app = Flask(__name__)
 
-# إعداد قاعدة البيانات
 def get_db_connection():
     conn = sqlite3.connect('database.db')
     conn.row_factory = sqlite3.Row
@@ -28,7 +27,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-# الصفحة الرئيسية ولوحة التحكم
 @app.route('/')
 def home():
     init_db()
@@ -37,7 +35,6 @@ def home():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # إذا لم يوجد توكن، اعرض لوحة التحكم
     if not token:
         cursor.execute("SELECT * FROM guests")
         raw_guests = cursor.fetchall()
@@ -67,7 +64,6 @@ def home():
         
         return render_template('admin.html', guests=guests, total=total, attending=attending, declined=declined, pending=pending)
     
-    # إذا وجد توكن، اعرض بطاقة الدعوة
     cursor.execute("SELECT * FROM guests WHERE token = ?", (token,))
     guest = cursor.fetchone()
     conn.close()
@@ -89,7 +85,6 @@ def home():
     
     return render_template('card.html', guest=guest_data)
 
-# إضافة ضيف جديد
 @app.route('/add', methods=['POST'])
 def add_guest():
     name = request.form.get('name')
@@ -106,7 +101,6 @@ def add_guest():
             print(f"Error adding guest: {e}")
     return redirect(url_for('home'))
 
-# إرسال حالة الحضور
 @app.route('/submit', methods=['POST'])
 def submit():
     token = request.form.get('token')
@@ -124,7 +118,6 @@ def submit():
     
     return render_template('thankyou.html', already_voted=False)
 
-# إعادة تعيين التصويت
 @app.route('/reset/<token>')
 def reset_vote(token):
     try:
@@ -137,7 +130,6 @@ def reset_vote(token):
         print(f"Error resetting: {e}")
     return redirect(url_for('home'))
 
-# صفحة تعديل البيانات
 @app.route('/edit/<token>')
 def edit_guest(token):
     try:
@@ -161,7 +153,6 @@ def edit_guest(token):
     except Exception as e:
         return f"خطأ: {str(e)}"
 
-# تحديث البيانات في قاعدة البيانات
 @app.route('/update', methods=['POST'])
 def update_guest():
     token = request.form.get('token')
