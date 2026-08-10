@@ -3,6 +3,10 @@ import sqlite3
 
 app = Flask(__name__)
 
+# فرض استخدام نطاق Render الخارجي لجميع الروابط المولدة تلقائياً
+app.config['SERVER_NAME'] = 'nmp-sy.onrender.com'
+app.config['PREFERRED_URL_SCHEME'] = 'https'
+
 @app.route('/')
 def index():
     token = request.args.get('token')
@@ -24,7 +28,7 @@ def index():
         'status': guest_data[2]
     }
     
-    # التعديل هنا: منع التصويت فقط إذا كانت الحالة مسجلة بشكل صريح بـ سأحضر أو أعتذر
+    # منع التصويت فقط إذا كانت الحالة مسجلة بشكل صريح بـ سأحضر أو أعتذر
     if guest['status'] in ['سأحضر', 'أعتذر عن الحضور']:
         return render_template('thankyou.html', guest=guest, already_voted=True)
     
@@ -56,7 +60,13 @@ def admin_dashboard():
     cursor = conn.cursor()
     
     cursor.execute("SELECT name, token, status FROM guests")
-    guests = cursor.fetchall()
+    raw_guests = cursor.fetchall()
+    
+    # تجهيز قائمة الضيوف مع الروابط الخارجية الصحيحة لتجنب روابط localhost
+    guests = []
+    for name, token, status in raw_guests:
+        link = f"https://nmp-sy.onrender.com/?token={token}"
+        guests.append((name, token, status, link))
     
     cursor.execute("SELECT COUNT(*) FROM guests")
     total = cursor.fetchone()[0]
