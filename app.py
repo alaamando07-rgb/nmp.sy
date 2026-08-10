@@ -4,20 +4,30 @@ import os
 
 app = Flask(__name__)
 
+def init_db():
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS guests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            token TEXT UNIQUE NOT NULL,
+            status TEXT DEFAULT 'لم يجب'
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
 @app.route('/')
 def home():
+    init_db()
     token = request.args.get('token')
-    
-    # التأكد من وجود ملف قاعدة البيانات
-    if not os.path.exists('database.db'):
-        return "خطأ: ملف قاعدة البيانات غير موجود على السيرفر! يرجى رفعه."
     
     try:
         conn = sqlite3.connect('database.db')
         cursor = conn.cursor()
         
         if not token:
-            # عرض لوحة الأدمن
             cursor.execute("SELECT name, token, status FROM guests")
             raw_guests = cursor.fetchall()
             
@@ -25,7 +35,7 @@ def home():
             for row in raw_guests:
                 name = row[0]
                 guest_token = row[1]
-                status = row[2] if len(row) > 2 else 'لم يجب'
+                status = row[2] if len(row) > 2 and row[2] else 'لم يجب'
                 link = f"https://nmp-sy.onrender.com/?token={guest_token}"
                 guests.append((name, guest_token, status, link))
             
@@ -43,7 +53,6 @@ def home():
             
             return render_template('admin.html', guests=guests, total=total, attending=attending, declined=declined, pending=pending)
         
-        # عرض بطاقة الضيف الفردية
         cursor.execute("SELECT name, token, status FROM guests WHERE token = ?", (token,))
         guest_data = cursor.fetchone()
         conn.close()
@@ -54,7 +63,7 @@ def home():
         guest = {
             'name': guest_data[0],
             'token': guest_data[1],
-            'status': guest_data[2] if len(guest_data) > 2 else 'لم يجب'
+            'status': guest_data[2] if len(guest_data) > 2 and guest_data[2] else 'لم يجب'
         }
         
         if guest['status'] in ['سأحضر', 'أعتذر عن الحضور']:
@@ -63,7 +72,7 @@ def home():
         return render_template('card.html', guest=guest)
         
     except Exception as e:
-        return f"حدث خطأ في قاعدة البيانات أو النظام: {str(e)}"
+        return f"خطأ في التنفيذ: {str(e)}"
 
 @app.route('/submit', methods=['POST'])
 def submit():
@@ -74,14 +83,8 @@ def submit():
         try:
             conn = sqlite3.connect('database.db')
             cursor = conn.cursor()
-            
-            cursor.execute("SELECT status FROM guests WHERE token = ?", (token,))
-            current_status = cursor.fetchone()
-            
-            if current_status and (not current_status[0] or current_status[0] == 'لم يجب'):
-                cursor.execute("UPDATE guests SET status = ? WHERE token = ?", (attendance, token))
-                conn.commit()
-                
+            cursor.execute("UPDATE guests SET status = ? WHERE token = ?", (attendance, token))
+            conn.commit()
             conn.close()
         except Exception:
             pass
