@@ -7,16 +7,19 @@ app = Flask(__name__)
 def home():
     token = request.args.get('token')
     
-    # إذا لم يكن هناك توكن، افتح لوحة الأدمن فوراً على الرابط الرئيسي
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+    
     if not token:
-        conn = sqlite3.connect('database.db')
-        cursor = conn.cursor()
-        
+        # عرض لوحة الأدمن
         cursor.execute("SELECT name, token, status FROM guests")
         raw_guests = cursor.fetchall()
         
         guests = []
-        for name, guest_token, status in raw_guests:
+        for row in raw_guests:
+            name = row[0]
+            guest_token = row[1]
+            status = row[2]
             link = f"https://nmp-sy.onrender.com/?token={guest_token}"
             guests.append((name, guest_token, status, link))
         
@@ -34,9 +37,7 @@ def home():
         
         return render_template('admin.html', guests=guests, total=total, attending=attending, declined=declined, pending=pending)
     
-    # أما إذا وُجد توكن، افتح بطاقة الدعوة الخاصة بالصيدلاني
-    conn = sqlite3.connect('database.db')
-    cursor = conn.cursor()
+    # عرض بطاقة الضيف الفردية
     cursor.execute("SELECT name, token, status FROM guests WHERE token = ?", (token,))
     guest_data = cursor.fetchone()
     conn.close()
