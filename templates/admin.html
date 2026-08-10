@@ -22,7 +22,6 @@
             margin-bottom: 25px;
             font-weight: 700;
         }
-        /* قسم إضافة ضيف جديد فوق الجدول */
         .add-box {
             background: #ffffff;
             padding: 20px;
@@ -62,7 +61,6 @@
         .add-btn:hover {
             background-color: #431f63;
         }
-        /* شريط بحث ثابت ومطابق للجميع */
         .search-box {
             position: sticky;
             top: 20px;
@@ -72,6 +70,9 @@
             background: rgba(244, 241, 250, 0.95);
             padding: 10px 0;
             backdrop-filter: blur(5px);
+            display: flex;
+            gap: 10px;
+            justify-content: center;
         }
         .search-box input {
             width: 100%;
@@ -85,8 +86,15 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.08);
             background: #fff;
         }
-        .search-box input:focus {
-            border-color: #5d2e86;
+        .next-btn {
+            background-color: #0288d1;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-family: 'Tajawal', sans-serif;
+            font-weight: 700;
         }
         .stats-grid {
             display: grid;
@@ -156,38 +164,13 @@
             text-decoration: none;
             font-size: 14px;
         }
-        .link-text:hover {
-            text-decoration: underline;
-        }
         .action-btns {
             display: flex;
             gap: 8px;
             align-items: center;
         }
-        .edit-btn {
-            background-color: #0288d1;
-            color: white;
-            padding: 6px 12px;
-            border-radius: 5px;
-            text-decoration: none;
-            font-size: 13px;
-            font-weight: 500;
-        }
-        .edit-btn:hover {
-            background-color: #01579b;
-        }
-        .reset-btn {
-            background-color: #d9534f;
-            color: white;
-            padding: 6px 12px;
-            border-radius: 5px;
-            text-decoration: none;
-            font-size: 13px;
-            font-weight: 500;
-        }
-        .reset-btn:hover {
-            background-color: #c9302c;
-        }
+        .edit-btn { background-color: #0288d1; color: white; padding: 6px 12px; border-radius: 5px; text-decoration: none; font-size: 13px; }
+        .reset-btn { background-color: #d9534f; color: white; padding: 6px 12px; border-radius: 5px; text-decoration: none; font-size: 13px; }
     </style>
 </head>
 <body>
@@ -195,7 +178,6 @@
     <div class="container">
         <h1>لوحة متابعة والتحكم بحضور الفعالية</h1>
 
-        <!-- قسم إضافة ضيف جديد فوق الجدول -->
         <div class="add-box">
             <form action="/add" method="POST" style="display: flex; gap: 10px; width: 100%; justify-content: center;">
                 <input type="text" name="name" placeholder="أدخل اسم الصيدلاني الجديد هنا..." required>
@@ -203,9 +185,9 @@
             </form>
         </div>
 
-        <!-- شريط البحث الذكي (يعرض الكل ويحدد النتائج المطابقة بدون إخفاء البقية) -->
         <div class="search-box">
-            <input type="text" id="searchInput" onkeyup="searchTable()" placeholder="ابحث عن أي اسم (يعرض الكل ويحدد المطابق)...">
+            <input type="text" id="searchInput" oninput="searchTable()" placeholder="ابحث عن اسم...">
+            <button class="next-btn" onclick="scrollToNext()">التالي ⬇</button>
         </div>
 
         <div class="stats-grid">
@@ -240,7 +222,7 @@
                 </thead>
                 <tbody>
                     {% for guest in guests %}
-                    <tr>
+                    <tr class="guest-row" data-name="{{ guest.name }}">
                         <td>{{ loop.index }}</td>
                         <td><strong>{{ guest.name }}</strong></td>
                         <td><a href="{{ guest.link }}" target="_blank" class="link-text">فتح الرابط</a></td>
@@ -269,31 +251,30 @@
     </div>
 
     <script>
+        let matchedRows = [];
+        let currentIndex = -1;
+
         function searchTable() {
-            var input = document.getElementById("searchInput");
-            var filter = input.value.toLowerCase().trim();
-            var table = document.getElementById("guestsTable");
-            var tr = table.getElementsByTagName("tr");
-
-            // إزالة التمييز عن كل الصفوف
-            for (var i = 1; i < tr.length; i++) {
-                tr[i].classList.remove("highlight-row");
-            }
-
-            if (filter === "") return;
-
-            // تمييز كل الصفوف التي تحتوى على النص المكتوب مع إبقاء الجدول كاملاً ظاهراً
-            for (var i = 1; i < tr.length; i++) {
-                var tdName = tr[i].getElementsByTagName("td")[1];
-                if (tdName) {
-                    var txtValue = tdName.textContent || tdName.innerText;
-                    if (txtValue.toLowerCase().indexOf(filter) > -1) {
-                        tr[i].classList.add("highlight-row");
-                    }
+            let filter = document.getElementById("searchInput").value.toLowerCase().trim();
+            let rows = document.querySelectorAll(".guest-row");
+            matchedRows = [];
+            
+            rows.forEach(row => {
+                row.classList.remove("highlight-row");
+                let name = row.getAttribute("data-name").toLowerCase();
+                if (filter !== "" && name.includes(filter)) {
+                    row.classList.add("highlight-row");
+                    matchedRows.push(row);
                 }
-            }
+            });
+            currentIndex = -1;
+        }
+
+        function scrollToNext() {
+            if (matchedRows.length === 0) return;
+            currentIndex = (currentIndex + 1) % matchedRows.length;
+            matchedRows[currentIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     </script>
-
 </body>
 </html>
