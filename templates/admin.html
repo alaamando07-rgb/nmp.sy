@@ -19,12 +19,18 @@
         h1 {
             color: #2b124c;
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
             font-weight: 700;
         }
         .search-box {
+            position: sticky;
+            top: 20px;
+            z-index: 1000;
             margin-bottom: 25px;
             text-align: center;
+            background: rgba(244, 241, 250, 0.95);
+            padding: 10px 0;
+            backdrop-filter: blur(5px);
         }
         .search-box input {
             width: 100%;
@@ -36,11 +42,12 @@
             border-radius: 30px;
             outline: none;
             transition: all 0.3s;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            background: #fff;
         }
         .search-box input:focus {
             border-color: #5d2e86;
-            box-shadow: 0 4px 15px rgba(93, 46, 134, 0.15);
+            box-shadow: 0 4px 20px rgba(93, 46, 134, 0.2);
         }
         .stats-grid {
             display: grid;
@@ -87,8 +94,15 @@
             color: white;
             font-weight: 700;
         }
+        tr {
+            transition: background-color 0.3s;
+        }
         tr:hover {
             background-color: #faf9fc;
+        }
+        .highlight-row {
+            background-color: #fff9c4 !important;
+            transition: background-color 0.5s ease;
         }
         .badge {
             padding: 6px 12px;
@@ -106,6 +120,24 @@
         }
         .link-text:hover {
             text-decoration: underline;
+        }
+        .action-btns {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .edit-btn {
+            background-color: #0288d1;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        .edit-btn:hover {
+            background-color: #01579b;
         }
         .reset-btn {
             background-color: #d9534f;
@@ -128,7 +160,7 @@
         <h1>لوحة متابعة والتحكم بحضور الفعالية</h1>
 
         <div class="search-box">
-            <input type="text" id="searchInput" onkeyup="searchTable()" placeholder="ابحث عن اسم الصيدلاني هنا...">
+            <input type="text" id="searchInput" onkeyup="searchAndScroll()" placeholder="ابحث عن اسم الصيدلاني للانتقال إليه...">
         </div>
 
         <div class="stats-grid">
@@ -158,7 +190,7 @@
                         <th>اسم الصيدلاني</th>
                         <th>رابط الدعوة</th>
                         <th>الحالة</th>
-                        <th>التحكم (إعادة التصويت)</th>
+                        <th>التحكم والإدارة</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -177,11 +209,12 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if guest[2] and guest[2] != 'لم يجب' %}
-                                <a href="/reset/{{ guest[1] }}" class="reset-btn" onclick="return confirm('هل أنت متأكد من إعادة فتح التصويت لهذا الصيدلاني؟')">إعادة تعيين</a>
-                            {% else %}
-                                <span style="color: #999; font-size: 13px;">لم يصوت بعد</span>
-                            {% endif %}
+                            <div class="action-btns">
+                                <a href="/edit/{{ guest[1] }}" class="edit-btn">تعديل</a>
+                                {% if guest[2] and guest[2] != 'لم يجب' %}
+                                    <a href="/reset/{{ guest[1] }}" class="reset-btn" onclick="return confirm('هل أنت متأكد من إعادة فتح التصويت لهذا الصيدلاني؟')">إعادة تعيين</a>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -191,20 +224,26 @@
     </div>
 
     <script>
-        function searchTable() {
+        function searchAndScroll() {
             var input = document.getElementById("searchInput");
             var filter = input.value.toLowerCase().trim();
             var table = document.getElementById("guestsTable");
             var tr = table.getElementsByTagName("tr");
 
             for (var i = 1; i < tr.length; i++) {
+                tr[i].classList.remove("highlight-row");
+            }
+
+            if (filter === "") return;
+
+            for (var i = 1; i < tr.length; i++) {
                 var tdName = tr[i].getElementsByTagName("td")[1];
                 if (tdName) {
                     var txtValue = tdName.textContent || tdName.innerText;
                     if (txtValue.toLowerCase().indexOf(filter) > -1) {
-                        tr[i].style.display = "";
-                    } else {
-                        tr[i].style.display = "none";
+                        tr[i].classList.add("highlight-row");
+                        tr[i].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        break;
                     }
                 }
             }
