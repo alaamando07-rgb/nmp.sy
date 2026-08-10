@@ -170,7 +170,8 @@
                     <tr>
                         <td>{{ loop.index }}</td>
                         <td><strong>{{ guest[0] }}</strong></td>
-                        <td><a href="/?token={{ guest[1] }}" target="_blank" class="link-text">فتح الرابط</a></td>
+                        <!-- تم تعديل الرابط ليكون صريحاً ومرتبطاً باستضافة Render مباشرة -->
+                        <td><a href="https://nmp-sy.onrender.com/?token={{ guest[1] }}" target="_blank" class="link-text">فتح الرابط</a></td>
                         <td>
                             {% if guest[2] == 'سأحضر' %}
                                 <span class="badge badge-attending">سأحضر</span>
