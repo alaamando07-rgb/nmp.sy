@@ -22,7 +22,6 @@
             margin-bottom: 30px;
             font-weight: 700;
         }
-        /* تصميم صندوق البحث */
         .search-box {
             margin-bottom: 25px;
             text-align: center;
@@ -128,12 +127,10 @@
     <div class="container">
         <h1>لوحة متابعة والتحكم بحضور الفعالية</h1>
 
-        <!-- حقل البحث الفوري -->
         <div class="search-box">
             <input type="text" id="searchInput" onkeyup="searchTable()" placeholder="ابحث عن اسم الصيدلاني هنا...">
         </div>
 
-        <!-- إحصائيات سريعة -->
         <div class="stats-grid">
             <div class="stat-card">
                 <h3>إجمالي المدعوين</h3>
@@ -153,7 +150,6 @@
             </div>
         </div>
 
-        <!-- جدول التحكم -->
         <div class="table-container">
             <table id="guestsTable">
                 <thead>
@@ -170,8 +166,8 @@
                     <tr>
                         <td>{{ loop.index }}</td>
                         <td><strong>{{ guest[0] }}</strong></td>
-                        <!-- اعتماد الرابط المباشر الكامل الممرر من بايثون guest[3] -->
-                        <td><a href="{{ guest[3] }}" target="_blank" class="link-text">فتح الرابط</a></td>
+                        <!-- تم ضبط الرابط ليوجه إلى مسار invite الصحيح -->
+                        <td><a href="https://nmp-sy.onrender.com/invite?token={{ guest[1] }}" target="_blank" class="link-text">فتح الرابط</a></td>
                         <td>
                             {% if guest[2] == 'سأحضر' %}
                                 <span class="badge badge-attending">سأحضر</span>
@@ -195,7 +191,6 @@
         </div>
     </div>
 
-    <!-- كود JavaScript للبحث الفوري -->
     <script>
         function searchTable() {
             var input = document.getElementById("searchInput");
@@ -204,7 +199,7 @@
             var tr = table.getElementsByTagName("tr");
 
             for (var i = 1; i < tr.length; i++) {
-                var tdName = tr[i].getElementsByTagName("td")[1]; // عمود اسم الصيدلاني
+                var tdName = tr[i].getElementsByTagName("td")[1];
                 if (tdName) {
                     var txtValue = tdName.textContent || tdName.innerText;
                     if (txtValue.toLowerCase().indexOf(filter) > -1) {
