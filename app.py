@@ -24,6 +24,15 @@ def init_db():
             time TEXT DEFAULT 'الساعة 3:00 ظهراً'
         )
     ''')
+    # التأكد من وجود الأعمدة حتى لو كانت قاعدة البيانات قديمة
+    cursor.execute("PRAGMA table_info(guests)")
+    columns = [column[1] for column in cursor.fetchall()]
+    if 'location' not in columns:
+        cursor.execute("ALTER TABLE guests ADD COLUMN location TEXT DEFAULT 'حمص نادي الأطباء والمهندسين'")
+    if 'date' not in columns:
+        cursor.execute("ALTER TABLE guests ADD COLUMN date TEXT DEFAULT 'يوم الاثنين 24/8/2026'")
+    if 'time' not in columns:
+        cursor.execute("ALTER TABLE guests ADD COLUMN time TEXT DEFAULT 'الساعة 3:00 ظهراً'")
     conn.commit()
     conn.close()
 
@@ -44,7 +53,7 @@ def home():
         declined = 0
         
         for row in raw_guests:
-            status = row['status'] if row['status'] else 'لم يجب'
+            status = row['status'] if 'status' in row.keys() and row['status'] else 'لم يجب'
             if status == 'سأحضر':
                 attending += 1
             elif status == 'أعتذر عن الحضور':
@@ -74,10 +83,10 @@ def home():
     guest_data = {
         'name': guest['name'],
         'token': guest['token'],
-        'status': guest['status'] if guest['status'] else 'لم يجب',
-        'location': guest['location'] or 'حمص نادي الأطباء والمهندسين',
-        'date': guest['date'] or 'يوم الاثنين 24/8/2026',
-        'time': guest['time'] or 'الساعة 3:00 ظهراً'
+        'status': guest['status'] if 'status' in guest.keys() and guest['status'] else 'لم يجب',
+        'location': guest['location'] if 'location' in guest.keys() and guest['location'] else 'حمص نادي الأطباء والمهندسين',
+        'date': guest['date'] if 'date' in guest.keys() and guest['date'] else 'يوم الاثنين 24/8/2026',
+        'time': guest['time'] if 'time' in guest.keys() and guest['time'] else 'الساعة 3:00 ظهراً'
     }
     
     if guest_data['status'] in ['سأحضر', 'أعتذر عن الحضور']:
@@ -145,9 +154,9 @@ def edit_guest(token):
         guest = {
             'name': row['name'],
             'token': row['token'],
-            'location': row['location'] or 'حمص نادي الأطباء والمهندسين',
-            'date': row['date'] or 'يوم الاثنين 24/8/2026',
-            'time': row['time'] or 'الساعة 3:00 ظهراً'
+            'location': row['location'] if 'location' in row.keys() and row['location'] else 'حمص نادي الأطباء والمهندسين',
+            'date': row['date'] if 'date' in row.keys() and row['date'] else 'يوم الاثنين 24/8/2026',
+            'time': row['time'] if 'time' in row.keys() and row['time'] else 'الساعة 3:00 ظهراً'
         }
         return render_template('edit.html', guest=guest)
     except Exception as e:
