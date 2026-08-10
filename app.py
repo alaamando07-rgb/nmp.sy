@@ -10,8 +10,26 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def init_db():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS guests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            token TEXT UNIQUE NOT NULL,
+            status TEXT DEFAULT 'لم يجب',
+            location TEXT DEFAULT 'حمص نادي الأطباء والمهندسين',
+            date TEXT DEFAULT 'يوم الاثنين 24/8/2026',
+            time TEXT DEFAULT 'الساعة 3:00 ظهراً'
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
 @app.route('/')
 def home():
+    init_db()
     token = request.args.get('token')
     
     if not os.path.exists('database.db'):
@@ -30,25 +48,14 @@ def home():
         cursor.execute(f"PRAGMA table_info([{table_name}]);")
         columns = [col['name'] for col in cursor.fetchall()]
         
-        name_col = columns[1] if len(columns) > 1 else columns[0]
-        token_col = columns[2] if len(columns) > 2 else columns[0]
-        status_col = columns[3] if len(columns) > 3 else None
-        
-        for c in columns:
-            lc = c.lower()
-            if 'name' in lc or 'اسم' in lc:
-                name_col = c
-            elif 'token' in lc or 'رابط' in lc or 'رمز' in lc or 'code' in lc:
-                token_col = c
-            elif 'status' in lc or 'حالة' in lc or 'رد' in lc:
-                status_col = c
+        if 'location' not in columns:
+            cursor.execute(f"ALTER TABLE [{table_name}] ADD COLUMN location TEXT DEFAULT 'حمص نادي الأطباء والمهندسين'")
+            cursor.execute(f"ALTER TABLE [{table_name}] ADD COLUMN date TEXT DEFAULT 'يوم الاثنين 24/8/2026'")
+            cursor.execute(f"ALTER TABLE [{table_name}] ADD COLUMN time TEXT DEFAULT 'الساعة 3:00 ظهراً'")
+            conn.commit()
 
         if not token:
-            if status_col:
-                cursor.execute(f"SELECT rowid, [{name_col}], [{token_col}], [{status_col}] FROM [{table_name}]")
-            else:
-                cursor.execute(f"SELECT rowid, [{name_col}], [{token_col}] FROM [{table_name}]")
-                
+            cursor.execute(f"SELECT * FROM [{table_name}]")
             raw_guests = cursor.fetchall()
             
             guests = []
@@ -56,9 +63,15 @@ def home():
             declined = 0
             
             for row in raw_guests:
-                name = row[name_col]
-                guest_token = row[token_col]
-                status = row[status_col] if status_col and row[status_col] else 'لم يجب'
+                # قراءة البيانات بأمان تام لتجنب أي خطأ في المفاتيح
+                row_keys = row.keys()
+                name_k = 'name' if 'name' in row_keys else list(row_keys)[1]
+                token_k = 'token' if 'token' in row_keys else list(row_keys)[2]
+                status_k = 'status' if 'status' in row_keys else (list(row_keys)[3] if len(row_keys) > 3 else None)
+                
+                name = row[name_k]
+                guest_token = row[token_k]
+                status = row[status_k] if status_k and row[status_k] else 'لم يجب'
                 
                 if status == 'سأحضر':
                     attending += 1
@@ -67,7 +80,6 @@ def home():
                     
                 link = f"https://nmp-sy.onrender.com/?token={guest_token}"
                 guests.append({
-                    'id': row['rowid'],
                     'name': name,
                     'token': guest_token,
                     'status': status,
@@ -81,21 +93,28 @@ def home():
             return render_template('admin.html', guests=guests, total=total, attending=attending, declined=declined, pending=pending)
         
         # عرض بطاقة الضيف
-        if status_col:
-            cursor.execute(f"SELECT [{name_col}], [{token_col}], [{status_col}] FROM [{table_name}] WHERE [{token_col}] = ?", (token,))
-        else:
-            cursor.execute(f"SELECT [{name_col}], [{token_col}] FROM [{table_name}] WHERE [{token_col}] = ?", (token,))
-            
+        cursor.execute(f"SELECT * FROM [{table_name}] WHERE token = ?", (token,))
         guest_data = cursor.fetchone()
         conn.close()
         
         if not guest_data:
             return "الرابط غير موجود أو تم حذفه."
         
+        row_keys = guest_data.keys()
+        name_k = 'name' if 'name' in row_keys else list(row_keys)[1]
+        token_k = 'token' if 'token' in row_keys else list(row_keys)[2]
+        status_k = 'status' if 'status' in row_keys else (list(row_keys)[3] if len(row_keys) > 3 else None)
+        loc_k = 'location' if 'location' in row_keys else 'حمص نادي الأطباء والمهندسين'
+        date_k = 'date' if 'date' in row_keys else 'يوم الاثنين 24/8/2026'
+        time_k = 'time' if 'time' in row_keys else 'الساعة 3:00 ظهراً'
+        
         guest = {
-            'name': guest_data[name_col],
-            'token': guest_data[token_col],
-            'status': guest_data[status_col] if status_col and guest_data[status_col] else 'لم يجب'
+            'name': guest_data[name_k],
+            'token': guest_data[token_k],
+            'status': guest_data[status_k] if status_k and guest_data[status_k] else 'لم يجب',
+            'location': guest_data[loc_k] if 'location' in row_keys and guest_data[loc_k] else 'حمص نادي الأطباء والمهندسين',
+            'date': guest_data[date_k] if 'date' in row_keys and guest_data[date_k] else 'يوم الاثنين 24/8/2026',
+            'time': guest_data[time_k] if 'time' in row_keys and guest_data[time_k] else 'الساعة 3:00 ظهراً'
         }
         
         if guest['status'] in ['سأحضر', 'أعتذر عن الحضور']:
@@ -114,29 +133,9 @@ def add_guest():
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            table_name = cursor.fetchone()['name']
-            
-            cursor.execute(f"PRAGMA table_info([{table_name}]);")
-            columns = [col['name'] for col in cursor.fetchall()]
-            name_col = columns[1] if len(columns) > 1 else columns[0]
-            token_col = columns[2] if len(columns) > 2 else columns[0]
-            status_col = columns[3] if len(columns) > 3 else None
-            
-            for c in columns:
-                lc = c.lower()
-                if 'name' in lc or 'اسم' in lc:
-                    name_col = c
-                elif 'token' in lc or 'رابط' in lc or 'رمز' in lc or 'code' in lc:
-                    token_col = c
-                elif 'status' in lc or 'حالة' in lc or 'رد' in lc:
-                    status_col = c
-            
             new_token = str(uuid.uuid4())[:8]
-            if status_col:
-                cursor.execute(f"INSERT INTO [{table_name}] ([{name_col}], [{token_col}], [{status_col}]) VALUES (?, ?, ?)", (name, new_token, 'لم يجب'))
-            else:
-                cursor.execute(f"INSERT INTO [{table_name}] ([{name_col}], [{token_col}]) VALUES (?, ?)", (name, new_token))
+            cursor.execute("INSERT INTO guests (name, token, status, location, date, time) VALUES (?, ?, ?, ?, ?, ?)",
+                           (name, new_token, 'لم يجب', 'حمص نادي الأطباء والمهندسين', 'يوم الاثنين 24/8/2026', 'الساعة 3:00 ظهراً'))
             conn.commit()
             conn.close()
         except Exception:
@@ -152,24 +151,8 @@ def submit():
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            table_name = cursor.fetchone()['name']
-            
-            cursor.execute(f"PRAGMA table_info([{table_name}]);")
-            columns = [col['name'] for col in cursor.fetchall()]
-            token_col = columns[2] if len(columns) > 2 else columns[0]
-            status_col = columns[3] if len(columns) > 3 else None
-            
-            for c in columns:
-                lc = c.lower()
-                if 'token' in lc or 'رابط' in lc or 'رمز' in lc or 'code' in lc:
-                    token_col = c
-                elif 'status' in lc or 'حالة' in lc or 'رد' in lc:
-                    status_col = c
-            
-            if status_col:
-                cursor.execute(f"UPDATE [{table_name}] SET [{status_col}] = ? WHERE [{token_col}] = ?", (attendance, token))
-                conn.commit()
+            cursor.execute("UPDATE guests SET status = ? WHERE token = ?", (attendance, token))
+            conn.commit()
             conn.close()
         except Exception:
             pass
@@ -181,24 +164,8 @@ def reset_vote(token):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        table_name = cursor.fetchone()['name']
-        
-        cursor.execute(f"PRAGMA table_info([{table_name}]);")
-        columns = [col['name'] for col in cursor.fetchall()]
-        token_col = columns[2] if len(columns) > 2 else columns[0]
-        status_col = columns[3] if len(columns) > 3 else None
-        
-        for c in columns:
-            lc = c.lower()
-            if 'token' in lc or 'رابط' in lc or 'رمز' in lc or 'code' in lc:
-                token_col = c
-            elif 'status' in lc or 'حالة' in lc or 'رد' in lc:
-                status_col = c
-        
-        if status_col:
-            cursor.execute(f"UPDATE [{table_name}] SET [{status_col}] = 'لم يجب' WHERE [{token_col}] = ?", (token,))
-            conn.commit()
+        cursor.execute("UPDATE guests SET status = 'لم يجب' WHERE token = ?", (token,))
+        conn.commit()
         conn.close()
     except Exception:
         pass
@@ -209,29 +176,21 @@ def edit_guest(token):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        table_name = cursor.fetchone()['name']
-        
-        cursor.execute(f"PRAGMA table_info([{table_name}]);")
-        columns = [col['name'] for col in cursor.fetchall()]
-        name_col = columns[1] if len(columns) > 1 else columns[0]
-        token_col = columns[2] if len(columns) > 2 else columns[0]
-        
-        for c in columns:
-            lc = c.lower()
-            if 'name' in lc or 'اسم' in lc:
-                name_col = c
-            elif 'token' in lc or 'رابط' in lc or 'رمز' in lc or 'code' in lc:
-                token_col = c
-                
-        cursor.execute(f"SELECT [{name_col}], [{token_col}] FROM [{table_name}] WHERE [{token_col}] = ?", (token,))
+        cursor.execute("SELECT * FROM guests WHERE token = ?", (token,))
         row = cursor.fetchone()
         conn.close()
         
         if not row:
             return "الضيف غير موجود."
             
-        guest = {'name': row[name_col], 'token': row[token_col]}
+        row_keys = row.keys()
+        guest = {
+            'name': row['name'] if 'name' in row_keys else row[1],
+            'token': row['token'] if 'token' in row_keys else row[2],
+            'location': row['location'] if 'location' in row_keys and row['location'] else 'حمص نادي الأطباء والمهندسين',
+            'date': row['date'] if 'date' in row_keys and row['date'] else 'يوم الاثنين 24/8/2026',
+            'time': row['time'] if 'time' in row_keys and row['time'] else 'الساعة 3:00 ظهراً'
+        }
         return render_template('edit.html', guest=guest)
     except Exception as e:
         return f"خطأ: {str(e)}"
@@ -239,28 +198,17 @@ def edit_guest(token):
 @app.route('/update', methods=['POST'])
 def update_guest():
     token = request.form.get('token')
-    new_name = request.form.get('name')
+    name = request.form.get('name')
+    location = request.form.get('location')
+    date = request.form.get('date')
+    time = request.form.get('time')
     
-    if token and new_name:
+    if token and name:
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            table_name = cursor.fetchone()['name']
-            
-            cursor.execute(f"PRAGMA table_info([{table_name}]);")
-            columns = [col['name'] for col in cursor.fetchall()]
-            name_col = columns[1] if len(columns) > 1 else columns[0]
-            token_col = columns[2] if len(columns) > 2 else columns[0]
-            
-            for c in columns:
-                lc = c.lower()
-                if 'name' in lc or 'اسم' in lc:
-                    name_col = c
-                elif 'token' in lc or 'رابط' in lc or 'رمز' in lc or 'code' in lc:
-                    token_col = c
-                    
-            cursor.execute(f"UPDATE [{table_name}] SET [{name_col}] = ? WHERE [{token_col}] = ?", (new_name, token))
+            cursor.execute("UPDATE guests SET name = ?, location = ?, date = ?, time = ? WHERE token = ?",
+                           (name, location, date, time, token))
             conn.commit()
             conn.close()
         except Exception:
