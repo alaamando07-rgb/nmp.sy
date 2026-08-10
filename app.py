@@ -15,23 +15,21 @@ def home():
         conn = sqlite3.connect('database.db')
         cursor = conn.cursor()
         
-        # جلب اسم الجدول الأول في قاعدة البيانات تلقائياً
+        # جلب اسم الجدول الأول في قاعدة البيانات
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = cursor.fetchall()
         if not tables:
             return "قاعدة البيانات فارغة من الجداول."
         table_name = tables[0][0]
         
-        # جلب أسماء الأعمدة الحقيقية في الجدول
+        # جلب أسماء الأعمدة للتحقق
         cursor.execute(f"PRAGMA table_info({table_name});")
         columns = [col[1] for col in cursor.fetchall()]
         
-        # ضمان اختيار أعمدة سليمة 100% لتجنب انهيار الاستعلام
         name_col = columns[1] if len(columns) > 1 else columns[0]
         token_col = columns[2] if len(columns) > 2 else columns[0]
-        status_col = columns[3] if len(columns) > 3 else (columns[2] if len(columns) > 2 else None)
+        status_col = columns[3] if len(columns) > 3 else None
         
-        # البحث المخصص إذا كانت أسماء الأعمدة تحتوي على الكلمات الدلالية
         for c in columns:
             lc = c.lower()
             if 'name' in lc or 'اسم' in lc:
@@ -42,7 +40,6 @@ def home():
                 status_col = c
 
         if not token:
-            # جلب البيانات بالأسماء المكتشفة
             if status_col:
                 cursor.execute(f"SELECT [{name_col}], [{token_col}], [{status_col}] FROM [{table_name}]")
             else:
@@ -71,9 +68,10 @@ def home():
             pending = total - (attending + declined)
             conn.close()
             
+            # إرسال المتغيرات مطابقة تماماً لما يتوقعه admin.html
             return render_template('admin.html', guests=guests, total=total, attending=attending, declined=declined, pending=pending)
         
-        # عرض بطاقة الضيف الفردية
+        # عرض بطاقة الضيف
         if status_col:
             cursor.execute(f"SELECT [{name_col}], [{token_col}], [{status_col}] FROM [{table_name}] WHERE [{token_col}] = ?", (token,))
         else:
@@ -97,7 +95,9 @@ def home():
         return render_template('card.html', guest=guest)
         
     except Exception as e:
-        return f"خطأ في التنفيذ: {str(e)}"
+        # سنعرض الخطأ التقني الحقيقي هنا لكي نراه بوضوح إذا حدث أي شيء
+        import traceback
+        return f"<pre>{traceback.format_exc()}</pre>"
 
 @app.route('/submit', methods=['POST'])
 def submit():
@@ -108,7 +108,6 @@ def submit():
         try:
             conn = sqlite3.connect('database.db')
             cursor = conn.cursor()
-            
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
             table_name = cursor.fetchone()[0]
             
@@ -127,7 +126,6 @@ def submit():
             if status_col:
                 cursor.execute(f"UPDATE [{table_name}] SET [{status_col}] = ? WHERE [{token_col}] = ?", (attendance, token))
                 conn.commit()
-                
             conn.close()
         except Exception:
             pass
@@ -139,7 +137,6 @@ def reset_vote(token):
     try:
         conn = sqlite3.connect('database.db')
         cursor = conn.cursor()
-        
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         table_name = cursor.fetchone()[0]
         
@@ -158,7 +155,6 @@ def reset_vote(token):
         if status_col:
             cursor.execute(f"UPDATE [{table_name}] SET [{status_col}] = 'لم يجب' WHERE [{token_col}] = ?", (token,))
             conn.commit()
-            
         conn.close()
     except Exception:
         pass
