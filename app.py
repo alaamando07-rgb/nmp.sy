@@ -15,9 +15,29 @@ def home():
         conn = sqlite3.connect('database.db')
         cursor = conn.cursor()
         
+        # جلب اسم الجدول الأول في قاعدة البيانات تلقائياً
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = cursor.fetchall()
+        if not tables:
+            return "قاعدة البيانات فارغة من الجداول."
+        table_name = tables[0][0]
+        
+        # جلب أسماء الأعمدة الحقيقية في الجدول لتجنب أي خطأ
+        cursor.execute(f"PRAGMA table_info({table_name});")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        # مطابقة الأعمدة بذكاء
+        name_col = next((c for c in columns if 'name' in c or 'اسم' in c), columns[1] if len(columns) > 1 else columns[0])
+        token_col = next((c for c in columns if 'token' in c or 'رابط' in c or 'رمز' in c), columns[2] if len(columns) > 2 else columns[0])
+        status_col = next((c for c in columns if 'status' in c or 'حالة' in c or 'رد' in c), columns[3] if len(columns) > 3 else None)
+        
         if not token:
-            # جلب البيانات بالترتيب والتنسيق المطابق تماماً لملف admin.html
-            cursor.execute("SELECT name, token, status FROM guests")
+            # جلب البيانات بالأسماء المكتشفة تلقائياً
+            if status_col:
+                cursor.execute(f"SELECT {name_col}, {token_col}, {status_col} FROM {table_name}")
+            else:
+                cursor.execute(f"SELECT {name_col}, {token_col} FROM {table_name}")
+                
             raw_guests = cursor.fetchall()
             
             guests = []
@@ -27,7 +47,7 @@ def home():
             for row in raw_guests:
                 name = row[0]
                 guest_token = row[1]
-                status = row[2] if row[2] else 'لم يجب'
+                status = row[2] if len(row) > 2 and row[2] else 'لم يجب'
                 
                 if status == 'سأحضر':
                     attending += 1
@@ -43,8 +63,12 @@ def home():
             
             return render_template('admin.html', guests=guests, total=total, attending=attending, declined=declined, pending=pending)
         
-        # عرض بطاقة الضيف الفردية عبر التوكن
-        cursor.execute("SELECT name, token, status FROM guests WHERE token = ?", (token,))
+        # عرض بطاقة الضيف الفردية
+        if status_col:
+            cursor.execute(f"SELECT {name_col}, {token_col}, {status_col} FROM {table_name} WHERE {token_col} = ?", (token,))
+        else:
+            cursor.execute(f"SELECT {name_col}, {token_col} FROM {table_name} WHERE {token_col} = ?", (token,))
+            
         guest_data = cursor.fetchone()
         conn.close()
         
@@ -54,7 +78,7 @@ def home():
         guest = {
             'name': guest_data[0],
             'token': guest_data[1],
-            'status': guest_data[2] if guest_data[2] else 'لم يجب'
+            'status': guest_data[2] if len(guest_data) > 2 and guest_data[2] else 'لم يجب'
         }
         
         if guest['status'] in ['سأحضر', 'أعتذر عن الحضور']:
@@ -63,7 +87,7 @@ def home():
         return render_template('card.html', guest=guest)
         
     except Exception as e:
-        return f"حدث خطأ في النظام أو قاعدة البيانات: {str(e)}"
+        return f"خطأ في التنفيذ: {str(e)}"
 
 @app.route('/submit', methods=['POST'])
 def submit():
@@ -75,11 +99,16 @@ def submit():
             conn = sqlite3.connect('database.db')
             cursor = conn.cursor()
             
-            cursor.execute("SELECT status FROM guests WHERE token = ?", (token,))
-            current_status = cursor.fetchone()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            table_name = cursor.fetchone()[0]
             
-            if current_status:
-                cursor.execute("UPDATE guests SET status = ? WHERE token = ?", (attendance, token))
+            cursor.execute(f"PRAGMA table_info({table_name});")
+            columns = [col[1] for col in cursor.fetchall()]
+            token_col = next((c for c in columns if 'token' in c or 'رابط' in c or 'رمز' in c), columns[2] if len(columns) > 2 else columns[0])
+            status_col = next((c for c in columns if 'status' in c or 'حالة' in c or 'رد' in c), None)
+            
+            if status_col:
+                cursor.execute(f"UPDATE {table_name} SET {status_col} = ? WHERE {token_col} = ?", (attendance, token))
                 conn.commit()
                 
             conn.close()
@@ -93,8 +122,19 @@ def reset_vote(token):
     try:
         conn = sqlite3.connect('database.db')
         cursor = conn.cursor()
-        cursor.execute("UPDATE guests SET status = 'لم يجب' WHERE token = ?", (token,))
-        conn.commit()
+        
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        table_name = cursor.fetchone()[0]
+        
+        cursor.execute(f"PRAGMA table_info({table_name});")
+        columns = [col[1] for col in cursor.fetchall()]
+        token_col = next((c for c in columns if 'token' in c or 'رابط' in c or 'رمز' in c), columns[2] if len(columns) > 2 else columns[0])
+        status_col = next((c for c in columns if 'status' in c or 'حالة' in c or 'رد' in c), None)
+        
+        if status_col:
+            cursor.execute(f"UPDATE {table_name} SET {status_col} = 'لم يجب' WHERE {token_col} = ?", (token,))
+            conn.commit()
+            
         conn.close()
     except Exception:
         pass
