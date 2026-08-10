@@ -22,21 +22,31 @@ def home():
             return "قاعدة البيانات فارغة من الجداول."
         table_name = tables[0][0]
         
-        # جلب أسماء الأعمدة الحقيقية في الجدول لتجنب أي خطأ
+        # جلب أسماء الأعمدة الحقيقية في الجدول
         cursor.execute(f"PRAGMA table_info({table_name});")
         columns = [col[1] for col in cursor.fetchall()]
         
-        # مطابقة الأعمدة بذكاء
-        name_col = next((c for c in columns if 'name' in c or 'اسم' in c), columns[1] if len(columns) > 1 else columns[0])
-        token_col = next((c for c in columns if 'token' in c or 'رابط' in c or 'رمز' in c), columns[2] if len(columns) > 2 else columns[0])
-        status_col = next((c for c in columns if 'status' in c or 'حالة' in c or 'رد' in c), columns[3] if len(columns) > 3 else None)
+        # ضمان اختيار أعمدة سليمة 100% لتجنب انهيار الاستعلام
+        name_col = columns[1] if len(columns) > 1 else columns[0]
+        token_col = columns[2] if len(columns) > 2 else columns[0]
+        status_col = columns[3] if len(columns) > 3 else (columns[2] if len(columns) > 2 else None)
         
+        # البحث المخصص إذا كانت أسماء الأعمدة تحتوي على الكلمات الدلالية
+        for c in columns:
+            lc = c.lower()
+            if 'name' in lc or 'اسم' in lc:
+                name_col = c
+            elif 'token' in lc or 'رابط' in lc or 'رمز' in lc or 'code' in lc:
+                token_col = c
+            elif 'status' in lc or 'حالة' in lc or 'رد' in lc:
+                status_col = c
+
         if not token:
-            # جلب البيانات بالأسماء المكتشفة تلقائياً
+            # جلب البيانات بالأسماء المكتشفة
             if status_col:
-                cursor.execute(f"SELECT {name_col}, {token_col}, {status_col} FROM {table_name}")
+                cursor.execute(f"SELECT [{name_col}], [{token_col}], [{status_col}] FROM [{table_name}]")
             else:
-                cursor.execute(f"SELECT {name_col}, {token_col} FROM {table_name}")
+                cursor.execute(f"SELECT [{name_col}], [{token_col}] FROM [{table_name}]")
                 
             raw_guests = cursor.fetchall()
             
@@ -65,9 +75,9 @@ def home():
         
         # عرض بطاقة الضيف الفردية
         if status_col:
-            cursor.execute(f"SELECT {name_col}, {token_col}, {status_col} FROM {table_name} WHERE {token_col} = ?", (token,))
+            cursor.execute(f"SELECT [{name_col}], [{token_col}], [{status_col}] FROM [{table_name}] WHERE [{token_col}] = ?", (token,))
         else:
-            cursor.execute(f"SELECT {name_col}, {token_col} FROM {table_name} WHERE {token_col} = ?", (token,))
+            cursor.execute(f"SELECT [{name_col}], [{token_col}] FROM [{table_name}] WHERE [{token_col}] = ?", (token,))
             
         guest_data = cursor.fetchone()
         conn.close()
@@ -104,11 +114,18 @@ def submit():
             
             cursor.execute(f"PRAGMA table_info({table_name});")
             columns = [col[1] for col in cursor.fetchall()]
-            token_col = next((c for c in columns if 'token' in c or 'رابط' in c or 'رمز' in c), columns[2] if len(columns) > 2 else columns[0])
-            status_col = next((c for c in columns if 'status' in c or 'حالة' in c or 'رد' in c), None)
+            token_col = columns[2] if len(columns) > 2 else columns[0]
+            status_col = columns[3] if len(columns) > 3 else None
+            
+            for c in columns:
+                lc = c.lower()
+                if 'token' in lc or 'رابط' in lc or 'رمز' in lc or 'code' in lc:
+                    token_col = c
+                elif 'status' in lc or 'حالة' in lc or 'رد' in lc:
+                    status_col = c
             
             if status_col:
-                cursor.execute(f"UPDATE {table_name} SET {status_col} = ? WHERE {token_col} = ?", (attendance, token))
+                cursor.execute(f"UPDATE [{table_name}] SET [{status_col}] = ? WHERE [{token_col}] = ?", (attendance, token))
                 conn.commit()
                 
             conn.close()
@@ -128,11 +145,18 @@ def reset_vote(token):
         
         cursor.execute(f"PRAGMA table_info({table_name});")
         columns = [col[1] for col in cursor.fetchall()]
-        token_col = next((c for c in columns if 'token' in c or 'رابط' in c or 'رمز' in c), columns[2] if len(columns) > 2 else columns[0])
-        status_col = next((c for c in columns if 'status' in c or 'حالة' in c or 'رد' in c), None)
+        token_col = columns[2] if len(columns) > 2 else columns[0]
+        status_col = columns[3] if len(columns) > 3 else None
+        
+        for c in columns:
+            lc = c.lower()
+            if 'token' in lc or 'رابط' in lc or 'رمز' in lc or 'code' in lc:
+                token_col = c
+            elif 'status' in lc or 'حالة' in lc or 'رد' in lc:
+                status_col = c
         
         if status_col:
-            cursor.execute(f"UPDATE {table_name} SET {status_col} = 'لم يجب' WHERE {token_col} = ?", (token,))
+            cursor.execute(f"UPDATE [{table_name}] SET [{status_col}] = 'لم يجب' WHERE [{token_col}] = ?", (token,))
             conn.commit()
             
         conn.close()
